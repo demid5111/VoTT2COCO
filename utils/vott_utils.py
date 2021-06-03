@@ -7,8 +7,8 @@ import numpy as np
 from glob import glob
 
 class VOTItem:
-    def __init__(self, path, index, img_dir):
-        self.item_dict = json.load(open(path, 'r'))
+    def __init__(self, path, index, img_dir, loaded_dict):
+        self.item_dict = loaded_dict or json.load(open(path, 'r'))
 
         self.index = index
         self.width = self.item_dict['asset']['size']['width']
@@ -73,13 +73,18 @@ class VOTTReader:
         img_dir = self.config['dataset']['source']['img_cat']
         files_list = glob(f'{directory}**/{key}/*.json')
 
+
+
+
         print(f'[LOGS] Parsing {len(files_list)} VoTT json files')
         for path in tqdm(files_list):
-            item = VOTItem(path, self.global_index, img_dir)
+            exported_annotation_json = json.load(open(path, 'r'))
+            for asset_id, asset_dict in exported_annotation_json['assets'].items():
+                item = VOTItem(path=path, index=self.global_index, img_dir=img_dir, loaded_dict=asset_dict)
 
-            for cat in set(item.categories):
-                if cat not in self.categories:
-                    self.categories.append(cat) 
+                for cat in set(item.categories):
+                    if cat not in self.categories:
+                        self.categories.append(cat)
 
-            self.global_index += 1
-            self.items.append(item)
+                self.global_index += 1
+                self.items.append(item)
