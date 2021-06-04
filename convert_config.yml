@@ -3,6 +3,7 @@ dataset:
     path: 'artifacts'  # where your VoTT project lives
     img_cat: ''
     anno_cat: ''
+    is_exported: False
   destination:
     path: 'dest'  # where you want to store new COCO dataset
     img_cat: images
