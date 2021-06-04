@@ -6,9 +6,10 @@ import cv2
 import numpy as np
 from glob import glob
 
+
 class VOTItem:
-    def __init__(self, path, index, img_dir):
-        self.item_dict = json.load(open(path, 'r'))
+    def __init__(self, path, index, img_dir, loaded_dict):
+        self.item_dict = loaded_dict or json.load(open(path, 'r'))
 
         self.index = index
         self.width = self.item_dict['asset']['size']['width']
@@ -19,7 +20,7 @@ class VOTItem:
         self.masks, self.areas = self.__read_masks()
 
         self.image_path = path.split('annotations')[0] + \
-            f'{img_dir}/{self.name}'
+                          f'{img_dir}/{self.name}'
         if path.split('annotations')[0] == path:
             # this is the situation when there is everything in one folder (VoTT v2.2.0)
             self.image_path = str(Path(path).parent / img_dir / self.name)
@@ -39,7 +40,7 @@ class VOTItem:
             categories_list.append(data['tags'][0])
 
         return bboxes_list, categories_list
-    
+
     def __read_masks(self):
         masks_list = []
         areas = []
@@ -54,11 +55,11 @@ class VOTItem:
 
             masks_list.append([mask])
             areas.append(cv2.contourArea(np.array([
-                [[mask[i], mask[i+1]] for i in range(0, len(mask), 2)]
+                [[mask[i], mask[i + 1]] for i in range(0, len(mask), 2)]
             ])))
-        
 
         return masks_list, areas
+
 
 class VOTTReader:
     def __init__(self, config):
@@ -68,18 +69,31 @@ class VOTTReader:
         self.items = []
 
     def parse_files(self):
-        directory = self.config['dataset']['source']['path']
-        key = self.config['dataset']['source']['anno_cat']
-        img_dir = self.config['dataset']['source']['img_cat']
+        source_dataset_config = self.config['dataset']['source']
+        directory = source_dataset_config['path']
+        key = source_dataset_config['anno_cat']
+        img_dir = source_dataset_config['img_cat']
         files_list = glob(f'{directory}**/{key}/*.json')
 
-        print(f'[LOGS] Parsing {len(files_list)} VoTT json files')
-        for path in tqdm(files_list):
-            item = VOTItem(path, self.global_index, img_dir)
+        is_exported_format = source_dataset_config.get('is_exported', False)
+        # for the exported format there is only one .json file containing all the annotations
+        if is_exported_format:
+            print(f'[LOGS] Parsing {len(files_list)} VoTT json files')
+            for path in tqdm(files_list):
+                exported_annotation_json = json.load(open(path, 'r'))
+                for asset_id, asset_dict in exported_annotation_json['assets'].items():
+                    item = VOTItem(path=path, index=self.global_index, img_dir=img_dir, loaded_dict=asset_dict)
+                    self.global_index += 1
+                    self.items.append(item)
 
+        else:
+            print(f'[LOGS] Parsing {len(files_list)} VoTT json files')
+            for path in tqdm(files_list):
+                item = VOTItem(path=path, index=self.global_index, img_dir=img_dir, loaded_dict=None)
+                self.global_index += 1
+                self.items.append(item)
+
+        for item in self.items:
             for cat in set(item.categories):
                 if cat not in self.categories:
-                    self.categories.append(cat) 
-
-            self.global_index += 1
-            self.items.append(item)
+                    self.categories.append(cat)
